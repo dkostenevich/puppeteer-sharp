@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -394,7 +394,7 @@ namespace PuppeteerSharp
 
                     void clientDisconnected(object sender, EventArgs e)
                     {
-                        _sessionClosedTcs.TrySetException(new TargetClosedException("Target closed", "Session closed"));
+                        _sessionClosedTcs.TrySetCanceled();
                         Client.Disconnected -= clientDisconnected;
                     }
                 }
@@ -1755,19 +1755,15 @@ namespace PuppeteerSharp
 
             Evaluate();
 
-            await Task.WhenAny(networkIdleTcs.Task, SessionClosedTask).WithTimeout(timeout, t =>
+            var task = await Task.WhenAny(networkIdleTcs.Task, SessionClosedTask).WithTimeout(timeout, t =>
             {
                 Cleanup();
-
                 return new TimeoutException($"Timeout of {t.TotalMilliseconds} ms exceeded");
             }).ConfigureAwait(false);
 
             Cleanup();
 
-            if (SessionClosedTask.IsFaulted)
-            {
-                await SessionClosedTask.ConfigureAwait(false);
-            }
+            await task.ConfigureAwait(false);
         }
 
         /// <summary>
@@ -1817,16 +1813,14 @@ namespace PuppeteerSharp
 
             FrameManager.NetworkManager.Request += requestEventListener;
 
-            await Task.WhenAny(requestTcs.Task, SessionClosedTask).WithTimeout(timeout, t =>
+            var task = await Task.WhenAny(requestTcs.Task, SessionClosedTask).WithTimeout(timeout, t =>
             {
                 FrameManager.NetworkManager.Request -= requestEventListener;
                 return new TimeoutException($"Timeout of {t.TotalMilliseconds} ms exceeded");
             }).ConfigureAwait(false);
 
-            if (SessionClosedTask.IsFaulted)
-            {
-                await SessionClosedTask.ConfigureAwait(false);
-            }
+            await task.ConfigureAwait(false);
+
             return await requestTcs.Task.ConfigureAwait(false);
         }
 
@@ -1901,12 +1895,10 @@ namespace PuppeteerSharp
 
             FrameManager.NetworkManager.Response += responseEventListener;
 
-            await Task.WhenAny(responseTcs.Task, SessionClosedTask).WithTimeout(timeout).ConfigureAwait(false);
+            var task = await Task.WhenAny(responseTcs.Task, SessionClosedTask).WithTimeout(timeout).ConfigureAwait(false);
 
-            if (SessionClosedTask.IsFaulted)
-            {
-                await SessionClosedTask.ConfigureAwait(false);
-            }
+            await task.ConfigureAwait(false);
+
             return await responseTcs.Task.ConfigureAwait(false);
         }
 
